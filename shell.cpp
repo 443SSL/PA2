@@ -1,11 +1,14 @@
-#include <stdio.h>
+#include <algorithm>
 #include <iostream>
-#include <sys/types.h>
+#include <fcntl.h>
+#include <vector>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
-#include <vector>
-#include <string.h>
-#include <unistd.h>
+#include <sys/types.h>
+#include <stdio.h>
 
 using namespace std;
 
@@ -21,7 +24,7 @@ string trim (string input){
         return "";
     }
 
-    int i = input.size() - 1;
+    i = input.size() - 1;
     while(i >= 0 && input[i] == ' '){
         i -= 1;
     }
@@ -39,8 +42,19 @@ vector<string> split (string line, string sep=" "){
     vector<string> result_args;
 
     while(line.size()){
-        
+        int idx = line.find(sep);
+        if(idx != string::npos){
+            result_args.push_back(line.substr(0,idx));
+            line = line.substr(idx + sep.size());
+            if(line.size() == 0){
+                result_args.push_back(line);
+            }
+        } else {
+            result_args.push_back(line);
+            line = "";
+        }
     }
+
     return result_args;
 }
 
@@ -52,6 +66,54 @@ char** vec_to_char_array(vector<string> parts){
         }
     result_args[parts.size()] = NULL;
     return result_args;
+}
+
+void cmd_execute(string cmd){
+    vector<string> arg_vec = split(cmd, " ");
+
+    int fwrite;
+    int fread;
+    char temp_char1[FILENAME_MAX];
+    char temp_char2[FILENAME_MAX];
+
+    
+    if(arg_vec[0] == "jobs"){
+        // shows what processes are running on the system
+        arg_vec[0] = "ps";
+    }
+
+    if(arg_vec[0] == "cd"){
+        if(arg_vec[1] == "-"){
+            getcwd(temp_char1, sizeof(temp_char1));
+            chdir(getenv("HOME"));
+            chdir(temp_char2);
+            strncpy(temp_char2, temp_char1, sizeof(temp_char1));
+        } else {
+            getcwd(temp_char2, sizeof(temp_char2));
+            chdir(arg_vec[1].c_str());
+        }
+    }
+
+    for(int i = 0; i < arg_vec.size(); i++){
+        if(arg_vec[i] == ">"){
+            fwrite = open(arg_vec[i + 1].c_str(), O_CREAT | O_WRONLY | S_IWUSR | S_IROTH | O_TRUNC, S_IRUSR) ;
+            dup2(fwrite, 1);
+            arg_vec.erase(arg_vec.begin()+i+1);
+            arg_vec.erase(arg_vec.begin()+i);
+        }
+    }
+
+    for(int i = 0; i < arg_vec.size(); i++){
+        if(arg_vec[i] == "<"){
+            fread = open(arg_vec[i + 1].c_str(), O_RDONLY, S_IRUSR |  S_IRGRP | S_IROTH | S_IWUSR );
+            dup2(fread,0);
+            arg_vec.erase(arg_vec.begin()+i);
+        }
+    }
+
+    // running the arguments
+    char** args = vec_to_char_array(arg_vec);
+    execvp(args[0], args);
 }
 
 
@@ -67,23 +129,40 @@ int main (){
             }
         }
 
-        cout << "My Shell$ ";
+        char loc[FILENAME_MAX];
+        cout << "Jay's Shell:" << getcwd(loc, sizeof(loc)) << "$ ";
         string inputline;
         getline (cin, inputline);   // get a line from standard input
         if (inputline == string("exit")){
             cout << "Bye!! End of shell" << endl;
             break;
         }
+
+        bool bg = false;
+        inputline = trim(inputline);
+        if (inputline[inputline.size()-1] == '&'){
+            cout << "Bg process found " << endl;
+            bg = true;
+            inputline = inputline.substr(0, inputline.size() - 1);
+        }
+        
         int pid = fork ();
+
         if (pid == 0){ //child process
-            vector<string> parts = split(inputline);
-            char** args = vec_to_char_array(parts);
+            //vector<string> parts = split(inputline);
+            //char** args = vec_to_char_array(parts);
             // preparing the input command for execution
             //char* args [] = {(char *) inputline.c_str(), NULL};  
-            execvp (args [0], args);
+            //execvp (args [0], args);
+            cmd_execute(inputline);
         }else{
-            waitpid (pid, 0, 0); // wait for the child process 
-            // we will discuss why waitpid() is preferred over wait()
+            if(!bg){
+                waitpid (pid, 0, 0); // wait for the child process 
+                // we will discuss why waitpid() is preferred over wait()
+            } else {
+                bgs.push_back(pid);
+            }
+            
         }
     }
 }
