@@ -39,13 +39,34 @@ vector<string> split (string line, string sep=" "){
     vector<string> result_args;
 
     while(line.size()){
-                    
+        
     }
     return result_args;
 }
 
+char** vec_to_char_array(vector<string> parts){
+    char** result_args = new char * [parts.size() + 1];
+        for(int i = 0; i < parts.size(); i++){
+            result_args[i] = new char [parts[i].size() + 1];
+            strcpy(result_args[i], parts[i].c_str());
+        }
+    result_args[parts.size()] = NULL;
+    return result_args;
+}
+
+
 int main (){
+    vector<int> bgs;
+
     while (true){
+        for(int i = 0; i < bgs.size(); i++){
+            if(waitpid(bgs[i], 0, WNOHANG) == bgs[i]){
+                cout << "Process: " << bgs[i] << " ended" << endl;
+                bgs.erase(bgs.begin() + i);
+                i--;
+            }
+        }
+
         cout << "My Shell$ ";
         string inputline;
         getline (cin, inputline);   // get a line from standard input
@@ -55,8 +76,10 @@ int main (){
         }
         int pid = fork ();
         if (pid == 0){ //child process
+            vector<string> parts = split(inputline);
+            char** args = vec_to_char_array(parts);
             // preparing the input command for execution
-            char* args [] = {(char *) inputline.c_str(), NULL};  
+            //char* args [] = {(char *) inputline.c_str(), NULL};  
             execvp (args [0], args);
         }else{
             waitpid (pid, 0, 0); // wait for the child process 
