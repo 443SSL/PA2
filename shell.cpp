@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <stdio.h>
 
+#define GREEN "\e[0;32m"
+
 using namespace std;
 
 string trim (string input){
@@ -42,9 +44,25 @@ vector<string> split (string line, string sep=" "){
     vector<string> result_args;
 
     while(line.size()){
+        // quote handler for echo and other cmds
+        if(line[0] == '"'){
+            int qpos;
+            for(int i = 1; i < line.length(); i++){
+                if(line[i] == '"'){
+                    qpos = i;
+                    break;
+                }
+            }
+            string str_trimmed = line.substr(1, qpos - 1);
+            if(line[1] == '{'){
+                str_trimmed.erase(remove(str_trimmed.begin(), str_trimmed.end(), ' '), str_trimmed.end());
+            }
+            str_trimmed = line.substr(qpos + 1);
+
+        }
         int idx = line.find(sep);
         if(idx != string::npos){
-            result_args.push_back(line.substr(0,idx));
+            result_args.push_back(line.substr(0, idx));
             line = line.substr(idx + sep.size());
             if(line.size() == 0){
                 result_args.push_back(line);
@@ -85,7 +103,7 @@ void cmd_execute(string cmd){
     if(arg_vec[0] == "cd"){
         if(arg_vec[1] == "-"){
             getcwd(temp_char1, sizeof(temp_char1));
-            chdir(getenv("HOME"));
+            //chdir(getenv("HOME"));
             chdir(temp_char2);
             strncpy(temp_char2, temp_char1, sizeof(temp_char1));
         } else {
@@ -130,39 +148,45 @@ int main (){
         }
 
         char loc[FILENAME_MAX];
-        cout << "Jay's Shell:" << getcwd(loc, sizeof(loc)) << "$ ";
+        cout << "Jay's Custom Shell:" << GREEN << getcwd(loc, sizeof(loc)) << "$ ";
         string inputline;
         getline (cin, inputline);   // get a line from standard input
         if (inputline == string("exit")){
-            cout << "Bye!! End of shell" << endl;
+            cout << "Bye!! End of custom shell" << endl;
             break;
         }
 
         bool bg = false;
         inputline = trim(inputline);
-        if (inputline[inputline.size()-1] == '&'){
+        size_t posA = inputline.find("&");
+        if (posA != string::npos){
             cout << "Bg process found " << endl;
             bg = true;
-            inputline = inputline.substr(0, inputline.size() - 1);
+            inputline.erase(inputline.begin() + posA);
+            inputline = trim(inputline);
+            //inputline = inputline.substr(0, inputline.size() - 1);
+        }
+        if(inputline != ""){
+            vector<string> cmds = split(inputline, "|");
+            int pid = fork ();
+
+            if (pid == 0){ //child process
+                //vector<string> parts = split(inputline);
+                //char** args = vec_to_char_array(parts);
+                // preparing the input command for execution
+                //char* args [] = {(char *) inputline.c_str(), NULL};  
+                //execvp (args [0], args);
+                cmd_execute(inputline);
+            }else{
+                if(!bg){
+                    waitpid (pid, 0, 0); // wait for the child process 
+                    // we will discuss why waitpid() is preferred over wait()
+                } else {
+                    bgs.push_back(pid);
+                }
+                
+            }
         }
         
-        int pid = fork ();
-
-        if (pid == 0){ //child process
-            //vector<string> parts = split(inputline);
-            //char** args = vec_to_char_array(parts);
-            // preparing the input command for execution
-            //char* args [] = {(char *) inputline.c_str(), NULL};  
-            //execvp (args [0], args);
-            cmd_execute(inputline);
-        }else{
-            if(!bg){
-                waitpid (pid, 0, 0); // wait for the child process 
-                // we will discuss why waitpid() is preferred over wait()
-            } else {
-                bgs.push_back(pid);
-            }
-            
-        }
     }
 }
